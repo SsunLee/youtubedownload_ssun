@@ -10,6 +10,8 @@ import {
   Sun,
   Download,
   Search,
+  Wand2,
+  FileVideo,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -40,6 +42,9 @@ type Copy = {
   m3u8Convert: string;
   m3u8UrlConvert: string;
   m3u8Hint: string;
+  m3u8Title: string;
+  m3u8NoFile: string;
+  m3u8Reset: string;
   analyze: string;
   analyzing: string;
   metaTitle: string;
@@ -49,6 +54,9 @@ type Copy = {
   outputFolder: string;
   format: string;
   progress: string;
+  logTitle: string;
+  logClear: string;
+  logEmpty: string;
   download: string;
   downloading: string;
   settings: string;
@@ -66,6 +74,7 @@ type Copy = {
   visitors: string;
   history: string;
   refresh: string;
+  deleteSelected: string;
   emptyHistory: string;
   downloadFile: string;
   ready: string;
@@ -99,6 +108,9 @@ const copy: Record<Locale, Copy> = {
     m3u8Convert: "Convert",
     m3u8UrlConvert: "Convert URL",
     m3u8Hint: "Requires ffmpeg installed on the server.",
+    m3u8Title: "M3U8 Download",
+    m3u8NoFile: "No file selected",
+    m3u8Reset: "Reset",
     analyze: "Analyze",
     analyzing: "Analyzing...",
     metaTitle: "Title",
@@ -108,6 +120,9 @@ const copy: Record<Locale, Copy> = {
     outputFolder: "Storage",
     format: "Format",
     progress: "Progress",
+    logTitle: "Log",
+    logClear: "Clear",
+    logEmpty: "No logs yet.",
     download: "Download",
     downloading: "Downloading...",
     settings: "Settings",
@@ -125,6 +140,7 @@ const copy: Record<Locale, Copy> = {
     visitors: "Visitors",
     history: "Download History",
     refresh: "Refresh",
+    deleteSelected: "Delete Selected",
     emptyHistory: "No downloads yet.",
     downloadFile: "Download",
     ready: "Ready",
@@ -156,6 +172,9 @@ const copy: Record<Locale, Copy> = {
     m3u8Convert: "변환",
     m3u8UrlConvert: "URL 변환",
     m3u8Hint: "서버에 ffmpeg 설치가 필요합니다.",
+    m3u8Title: "M3U8 다운로드",
+    m3u8NoFile: "선택된 파일 없음",
+    m3u8Reset: "초기화",
     analyze: "메타 조회",
     analyzing: "조회 중...",
     metaTitle: "제목",
@@ -165,6 +184,9 @@ const copy: Record<Locale, Copy> = {
     outputFolder: "저장 위치",
     format: "포맷",
     progress: "진행률",
+    logTitle: "로그",
+    logClear: "로그 지우기",
+    logEmpty: "로그가 없습니다.",
     download: "다운로드",
     downloading: "다운로드 중...",
     settings: "설정",
@@ -182,6 +204,7 @@ const copy: Record<Locale, Copy> = {
     visitors: "방문자 수",
     history: "다운로드 히스토리",
     refresh: "새로고침",
+    deleteSelected: "선택 삭제",
     emptyHistory: "다운로드 기록이 없습니다.",
     downloadFile: "다운로드",
     ready: "준비 완료",
@@ -213,6 +236,9 @@ const copy: Record<Locale, Copy> = {
     m3u8Convert: "変換",
     m3u8UrlConvert: "URL 変換",
     m3u8Hint: "サーバーに ffmpeg が必要です。",
+    m3u8Title: "M3U8 ダウンロード",
+    m3u8NoFile: "選択されたファイルなし",
+    m3u8Reset: "リセット",
     analyze: "メタ取得",
     analyzing: "取得中...",
     metaTitle: "タイトル",
@@ -222,6 +248,9 @@ const copy: Record<Locale, Copy> = {
     outputFolder: "保存先",
     format: "フォーマット",
     progress: "進捗",
+    logTitle: "ログ",
+    logClear: "クリア",
+    logEmpty: "ログがありません。",
     download: "ダウンロード",
     downloading: "ダウンロード中...",
     settings: "設定",
@@ -239,6 +268,7 @@ const copy: Record<Locale, Copy> = {
     visitors: "訪問者数",
     history: "ダウンロード履歴",
     refresh: "更新",
+    deleteSelected: "選択削除",
     emptyHistory: "ダウンロード履歴がありません。",
     downloadFile: "ダウンロード",
     ready: "準備完了",
@@ -298,8 +328,13 @@ export function AppShell({ view = "download" }: AppShellProps) {
   const [meta, setMeta] = React.useState<MetaInfo | null>(null);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [m3u8Url, setM3u8Url] = React.useState("");
-  const [m3u8File, setM3u8File] = React.useState<File | null>(null);
+  const [m3u8Files, setM3u8Files] = React.useState<File[]>([]);
   const [m3u8Busy, setM3u8Busy] = React.useState(false);
+  const [m3u8Progress, setM3u8Progress] = React.useState(0);
+  const [m3u8JobId, setM3u8JobId] = React.useState<string | null>(null);
+  const [selectedHistory, setSelectedHistory] = React.useState<Set<string>>(new Set());
+  const [logs, setLogs] = React.useState<string[]>([]);
+  const m3u8FileRef = React.useRef<HTMLInputElement | null>(null);
   const [visits, setVisits] = React.useState<number | null>(null);
 
   const loadHistory = React.useCallback(async () => {
@@ -317,6 +352,74 @@ export function AppShell({ view = "download" }: AppShellProps) {
     }
     setHydrated(true);
   }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedJob = window.localStorage.getItem("m3u8_job_id");
+    if (savedJob) {
+      setM3u8JobId(savedJob);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!m3u8JobId) return;
+    let alive = true;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/m3u8/progress/${m3u8JobId}`, { cache: "no-store" });
+        if (!res.ok) {
+          if (res.status === 404) {
+            setM3u8JobId(null);
+            setM3u8Progress(0);
+            window.localStorage.removeItem("m3u8_job_id");
+          }
+          return;
+        }
+        const data = (await res.json()) as { status: string; progress: number; error?: string; fileName?: string };
+        if (!alive) return;
+        setM3u8Progress(data.progress ?? 0);
+        if (data.status === "done") {
+          setStatus(`OK: ${data.fileName ?? ""}`);
+          addLog(`[M3U8] 완료: ${data.fileName ?? ""}`);
+          setM3u8Busy(false);
+          setM3u8JobId(null);
+          window.localStorage.removeItem("m3u8_job_id");
+          await loadHistory();
+          clearInterval(interval);
+        }
+        if (data.status === "error") {
+          setStatus(`실패: ${data.error ?? "Unknown error"}`);
+          addLog(`[M3U8] 실패: ${data.error ?? "Unknown error"}`);
+          setM3u8Busy(false);
+          setM3u8JobId(null);
+          window.localStorage.removeItem("m3u8_job_id");
+          clearInterval(interval);
+        }
+      } catch {
+        // ignore
+      }
+    }, 1000);
+
+    return () => {
+      alive = false;
+      clearInterval(interval);
+    };
+  }, [m3u8JobId, loadHistory]);
+
+  const addLog = (message: string) => {
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`].slice(-200));
+  };
+
+  const clearLogs = () => {
+    setLogs([]);
+  };
+
+  const resetM3u8File = () => {
+    setM3u8Files([]);
+    if (m3u8FileRef.current) {
+      m3u8FileRef.current.value = "";
+    }
+  };
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -404,6 +507,7 @@ export function AppShell({ view = "download" }: AppShellProps) {
       return;
     }
     setAnalyzing(true);
+    addLog(`[YouTube] 메타 조회 시작`);
     try {
       const res = await fetch("/api/meta", {
         method: "POST",
@@ -412,10 +516,12 @@ export function AppShell({ view = "download" }: AppShellProps) {
       });
       if (!res.ok) {
         setAnalyzing(false);
+        addLog(`[YouTube] 메타 조회 실패`);
         return;
       }
       const data = (await res.json()) as MetaInfo;
       setMeta(data);
+      addLog(`[YouTube] 메타 조회 완료`);
     } finally {
       setAnalyzing(false);
     }
@@ -429,6 +535,7 @@ export function AppShell({ view = "download" }: AppShellProps) {
     setDownloading(true);
     setProgress(0);
     setStatus(t.statusPreparing);
+    addLog(`[YouTube] 다운로드 시작`);
 
     try {
       const res = await fetch("/api/download", {
@@ -440,6 +547,7 @@ export function AppShell({ view = "download" }: AppShellProps) {
       if (!res.ok) {
         const data = await res.json();
         setStatus(`실패: ${data?.error ?? "Unknown error"}`);
+        addLog(`[YouTube] 실패: ${data?.error ?? "Unknown error"}`);
         setDownloading(false);
         return;
       }
@@ -449,6 +557,7 @@ export function AppShell({ view = "download" }: AppShellProps) {
       setStatus(t.statusQueued);
     } catch (error) {
       setStatus(`실패: ${error instanceof Error ? error.message : "Unknown error"}`);
+      addLog(`[YouTube] 실패: ${error instanceof Error ? error.message : "Unknown error"}`);
       setDownloading(false);
     }
   };
@@ -462,23 +571,29 @@ export function AppShell({ view = "download" }: AppShellProps) {
   };
 
   const onM3u8File = async () => {
-    if (!m3u8File) {
+    if (m3u8Files.length === 0) {
       setStatus(t.statusMissingUrl);
       return;
     }
     setM3u8Busy(true);
     try {
-      const formData = new FormData();
-      formData.append("file", m3u8File);
-      const res = await fetch("/api/m3u8/file", { method: "POST", body: formData });
-      if (!res.ok) {
-        const data = await res.json();
-        setStatus(`실패: ${data?.error ?? "Unknown error"}`);
-        return;
+      for (const file of m3u8Files) {
+        addLog(`[M3U8] 파일 변환 시작: ${file.name}`);
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/m3u8/file", { method: "POST", body: formData });
+        if (!res.ok) {
+          const data = await res.json();
+          setStatus(`실패: ${data?.error ?? "Unknown error"}`);
+          addLog(`[M3U8] 실패: ${data?.error ?? "Unknown error"}`);
+          continue;
+        }
+        const data = (await res.json()) as { jobId: string };
+        setM3u8JobId(data.jobId);
+        window.localStorage.setItem("m3u8_job_id", data.jobId);
+        setM3u8Progress(0);
+        setStatus(t.statusQueued);
       }
-      const data = (await res.json()) as { fileName: string };
-      setStatus(`OK: ${data.fileName}`);
-      await loadHistory();
     } finally {
       setM3u8Busy(false);
     }
@@ -490,6 +605,7 @@ export function AppShell({ view = "download" }: AppShellProps) {
       return;
     }
     setM3u8Busy(true);
+    addLog(`[M3U8] URL 변환 시작: ${m3u8Url}`);
     try {
       const res = await fetch("/api/m3u8/url", {
         method: "POST",
@@ -499,13 +615,39 @@ export function AppShell({ view = "download" }: AppShellProps) {
       if (!res.ok) {
         const data = await res.json();
         setStatus(`실패: ${data?.error ?? "Unknown error"}`);
+        addLog(`[M3U8] 실패: ${data?.error ?? "Unknown error"}`);
         return;
       }
-      const data = (await res.json()) as { fileName: string };
-      setStatus(`OK: ${data.fileName}`);
-      await loadHistory();
+      const data = (await res.json()) as { jobId: string };
+      setM3u8JobId(data.jobId);
+      window.localStorage.setItem("m3u8_job_id", data.jobId);
+      setM3u8Progress(0);
+      setStatus(t.statusQueued);
     } finally {
       setM3u8Busy(false);
+    }
+  };
+
+  const toggleHistory = (name: string) => {
+    setSelectedHistory((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const clearSelectedHistory = async () => {
+    if (selectedHistory.size === 0) return;
+    const names = Array.from(selectedHistory);
+    const res = await fetch("/api/downloads/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+    if (res.ok) {
+      setSelectedHistory(new Set());
+      await loadHistory();
     }
   };
 
@@ -664,7 +806,13 @@ export function AppShell({ view = "download" }: AppShellProps) {
                 {t.dashboard}
               </p>
               <h1 className="text-2xl font-semibold">
-                {view === "settings" ? t.settingsTitle : view === "support" ? t.supportTitle : t.title}
+                {view === "settings"
+                  ? t.settingsTitle
+                  : view === "support"
+                    ? t.supportTitle
+                    : view === "m3u8"
+                      ? t.m3u8Title
+                      : t.title}
               </h1>
             </div>
             <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-2 text-sm">
@@ -766,19 +914,35 @@ export function AppShell({ view = "download" }: AppShellProps) {
                       <Button className="rounded-2xl" onClick={onDownload} disabled={downloading}>
                         {downloading ? t.downloading : t.download}
                       </Button>
-                        <Button
-                          variant="outline"
-                          className="rounded-2xl"
-                          onClick={onCancel}
-                          disabled={!downloading}
-                        >
-                          {t.stop}
-                        </Button>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className={`h-2.5 w-2.5 rounded-full ${statusTone}`} />
-                      {status}
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl"
+                        onClick={onCancel}
+                        disabled={!downloading}
+                      >
+                        {t.stop}
+                      </Button>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span className={`h-2.5 w-2.5 rounded-full ${statusTone}`} />
+                        {status}
+                      </div>
                     </div>
-                  </div>
+
+                    <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                          {t.logTitle}
+                        </p>
+                        <Button variant="ghost" size="sm" onClick={clearLogs}>
+                          {t.logClear}
+                        </Button>
+                      </div>
+                      <div className="mt-3 h-40 overflow-auto rounded-xl bg-black/70 p-3 font-mono text-[11px] text-green-200">
+                        {logs.length === 0
+                          ? t.logEmpty
+                          : logs.map((line, idx) => <div key={idx}>{line}</div>)}
+                      </div>
+                    </div>
                   </>
                 </div>
               </div>
@@ -787,9 +951,14 @@ export function AppShell({ view = "download" }: AppShellProps) {
                 <div className="rounded-3xl border border-border/60 bg-card/80 p-6 shadow-sm">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">{t.history}</h2>
-                    <Button variant="ghost" size="sm" onClick={loadHistory}>
-                      {t.refresh}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={clearSelectedHistory}>
+                        {t.deleteSelected}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={loadHistory}>
+                        {t.refresh}
+                      </Button>
+                    </div>
                   </div>
                   <div className="mt-4 space-y-3">
                     {history.length === 0 && (
@@ -798,10 +967,17 @@ export function AppShell({ view = "download" }: AppShellProps) {
                     {history.map((item) => (
                       <div
                         key={`${item.name}-${item.createdAt}`}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3"
+                        className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3"
                       >
-                        <div>
-                          <p className="text-sm font-medium">{item.name}</p>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedHistory.has(item.name)}
+                            onChange={() => toggleHistory(item.name)}
+                          />
+                        </label>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{item.name}</p>
                           <p className="text-xs text-muted-foreground">
                             {(item.size / (1024 * 1024)).toFixed(1)} MB · {item.format ?? ""}
                           </p>
@@ -876,7 +1052,7 @@ export function AppShell({ view = "download" }: AppShellProps) {
           {view === "m3u8" && (
             <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
               <div className="rounded-3xl border border-border/60 bg-card/80 p-6 shadow-sm">
-                <h2 className="text-lg font-semibold">{t.navM3u8}</h2>
+                <h2 className="text-lg font-semibold">{t.m3u8Title}</h2>
                 <p className="mt-2 text-sm text-muted-foreground">{t.m3u8Hint}</p>
 
                 <div className="mt-6 grid gap-4">
@@ -886,21 +1062,54 @@ export function AppShell({ view = "download" }: AppShellProps) {
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <input
+                        ref={m3u8FileRef}
                         type="file"
                         accept=".m3u8"
+                        className="hidden"
+                        multiple
                         onChange={(event) =>
-                          setM3u8File(event.target.files?.[0] ?? null)
+                          setM3u8Files(event.target.files ? Array.from(event.target.files) : [])
                         }
                       />
                       <Button
                         variant="outline"
+                        size="sm"
+                        onClick={() => m3u8FileRef.current?.click()}
+                      >
+                        {t.m3u8Upload}
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        {m3u8Files.length > 0
+                          ? `${m3u8Files.length} files`
+                          : t.m3u8NoFile}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={resetM3u8File}
+                        disabled={m3u8Files.length === 0}
+                      >
+                        {t.m3u8Reset}
+                      </Button>
+                      <Button
+                        variant="outline"
                         className="rounded-xl"
                         onClick={onM3u8File}
-                        disabled={m3u8Busy || !m3u8File}
+                        disabled={m3u8Busy || m3u8Files.length === 0}
                       >
+                        <FileVideo className="mr-2 h-4 w-4" />
                         {m3u8Busy ? t.analyzing : t.m3u8Convert}
                       </Button>
                     </div>
+                    {m3u8Files.length > 0 && (
+                      <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                        {m3u8Files.map((file) => (
+                          <li key={file.name} className="truncate">
+                            {file.name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
 
                   <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
@@ -920,25 +1129,55 @@ export function AppShell({ view = "download" }: AppShellProps) {
                         onClick={onM3u8Url}
                         disabled={m3u8Busy}
                       >
+                        <Wand2 className="mr-2 h-4 w-4" />
                         {m3u8Busy ? t.analyzing : t.m3u8UrlConvert}
                       </Button>
                     </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{t.progress}</span>
+                      <span>{Math.round(m3u8Progress)}%</span>
+                    </div>
+                    <Progress value={m3u8Progress} className="mt-3" />
                   </div>
 
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <span className={`h-2.5 w-2.5 rounded-full ${statusTone}`} />
                     {status}
                   </div>
+
+                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                        {t.logTitle}
+                      </p>
+                      <Button variant="ghost" size="sm" onClick={clearLogs}>
+                        {t.logClear}
+                      </Button>
+                    </div>
+                    <div className="mt-3 h-40 overflow-auto rounded-xl bg-black/70 p-3 font-mono text-[11px] text-green-200">
+                      {logs.length === 0
+                        ? t.logEmpty
+                        : logs.map((line, idx) => <div key={idx}>{line}</div>)}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-6">
                 <div className="rounded-3xl border border-border/60 bg-card/80 p-6 shadow-sm">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-lg font-semibold">{t.history}</h2>
-                    <Button variant="ghost" size="sm" onClick={loadHistory}>
-                      {t.refresh}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={clearSelectedHistory}>
+                        {t.deleteSelected}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={loadHistory}>
+                        {t.refresh}
+                      </Button>
+                    </div>
                   </div>
                   <div className="mt-4 space-y-3">
                     {history.length === 0 && (
@@ -947,10 +1186,17 @@ export function AppShell({ view = "download" }: AppShellProps) {
                     {history.map((item) => (
                       <div
                         key={`${item.name}-${item.createdAt}`}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3"
+                        className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3"
                       >
-                        <div>
-                          <p className="text-sm font-medium">{item.name}</p>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedHistory.has(item.name)}
+                            onChange={() => toggleHistory(item.name)}
+                          />
+                        </label>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{item.name}</p>
                           <p className="text-xs text-muted-foreground">
                             {(item.size / (1024 * 1024)).toFixed(1)} MB · {item.format ?? ""}
                           </p>
