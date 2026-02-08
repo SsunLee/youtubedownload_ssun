@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getWritableBaseDir } from "@/lib/storage-path";
 
 export const runtime = "nodejs";
 
-const BASE_DIR = process.env.VERCEL ? "/tmp" : process.cwd();
+const BASE_DIR = getWritableBaseDir();
 const DATA_DIR = path.join(BASE_DIR, "data");
 const COUNTER_PATH = path.join(DATA_DIR, "visits.json");
 

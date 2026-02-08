@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
 import { Readable } from "stream";
+import { getWritableBaseDir } from "@/lib/storage-path";
 
 export const runtime = "nodejs";
 
-const BASE_DIR = process.env.VERCEL ? "/tmp" : process.cwd();
+const BASE_DIR = getWritableBaseDir();
 const DOWNLOAD_DIR = path.join(BASE_DIR, "downloads");
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ name: string }> }) {

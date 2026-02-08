@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
+import { getWritableBaseDir } from "@/lib/storage-path";
 
 export const runtime = "nodejs";
 
-const BASE_DIR = process.env.VERCEL ? "/tmp" : process.cwd();
+const BASE_DIR = getWritableBaseDir();
 const DOWNLOAD_DIR = path.join(BASE_DIR, "downloads");
 const MANIFEST_PATH = path.join(DOWNLOAD_DIR, "manifest.json");
 
@@ -39,6 +40,10 @@ function safeName(input: string) {
 
 function runFfmpeg(inputUrl: string, outputPath: string) {
   return new Promise<void>((resolve, reject) => {
+    const ffmpegPath =
+      process.platform === "win32"
+        ? "ffmpeg"
+        : path.join(process.cwd(), "bin", "ffmpeg");
     const args = [
       "-protocol_whitelist",
       "file,http,https,tcp,tls,crypto",
@@ -51,7 +56,7 @@ function runFfmpeg(inputUrl: string, outputPath: string) {
       "-y",
       outputPath,
     ];
-    const proc = spawn("ffmpeg", args);
+    const proc = spawn(ffmpegPath, args);
     let stderr = "";
     proc.stderr.on("data", (chunk) => {
       stderr += chunk.toString();

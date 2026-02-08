@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs";
 import ytdlpExec from "yt-dlp-exec";
+import { getWritableBaseDir } from "@/lib/storage-path";
 
 export type JobStatus = "queued" | "running" | "done" | "error";
 
@@ -16,7 +17,7 @@ export type DownloadJob = {
   updatedAt: string;
 };
 
-const BASE_DIR = process.env.VERCEL ? "/tmp" : process.cwd();
+const BASE_DIR = getWritableBaseDir();
 const DOWNLOAD_DIR = path.join(BASE_DIR, "downloads");
 const MANIFEST_PATH = path.join(DOWNLOAD_DIR, "manifest.json");
 
