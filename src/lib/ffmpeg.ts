@@ -1,7 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { pipeline } from "stream/promises";
-import { Readable } from "stream";
 
 const FFMPEG_URL = "https://github.com/SsunLee/youtubedownload_ssun/releases/download/ffmpeg-v1/ffmpeg";
 
@@ -20,8 +18,8 @@ export async function ensureFfmpeg(): Promise<string> {
     throw new Error(`Failed to download ffmpeg: ${res.status}`);
   }
 
-  const nodeStream = Readable.fromWeb(res.body as unknown as ReadableStream);
-  await pipeline(nodeStream, fs.createWriteStream(ffmpegPath, { mode: 0o755 }));
+  const buf = Buffer.from(await res.arrayBuffer());
+  fs.writeFileSync(ffmpegPath, buf, { mode: 0o755 });
 
   return ffmpegPath;
 }
