@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { getWritableBaseDir } from "@/lib/storage-path";
+import { ensureFfmpeg } from "@/lib/ffmpeg";
 
 export const runtime = "nodejs";
 
@@ -42,12 +43,12 @@ function safeName(input: string) {
   return input.replace(/[<>:"/\\|?*]+/g, "_").slice(0, 120);
 }
 
-function runFfmpeg(inputPath: string, outputPath: string) {
+async function runFfmpeg(inputPath: string, outputPath: string) {
   return new Promise<void>((resolve, reject) => {
-    const ffmpegPath =
+    const ffmpegPathPromise =
       process.platform === "win32"
-        ? "ffmpeg"
-        : path.join(process.cwd(), "bin", "ffmpeg");
+        ? Promise.resolve("ffmpeg")
+        : ensureFfmpeg();
     const args = [
       "-protocol_whitelist",
       "file,http,https,tcp,tls,crypto",
@@ -60,15 +61,19 @@ function runFfmpeg(inputPath: string, outputPath: string) {
       "-y",
       outputPath,
     ];
-    const proc = spawn(ffmpegPath, args);
-    let stderr = "";
-    proc.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    proc.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(stderr || "ffmpeg failed"));
-    });
+    ffmpegPathPromise
+      .then((ffmpegPath) => {
+        const proc = spawn(ffmpegPath, args);
+        let stderr = "";
+        proc.stderr.on("data", (chunk) => {
+          stderr += chunk.toString();
+        });
+        proc.on("close", (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(stderr || "ffmpeg failed"));
+        });
+      })
+      .catch(reject);
   });
 }
 
