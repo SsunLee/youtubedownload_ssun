@@ -219,7 +219,7 @@ const copy: Record<Locale, Copy> = {
   },
   JP: {
     navDownload: "YouTube ダウンロード",
-    navM3u8: "M3U8 Download",
+    navM3u8: "M3U8 ダウンロード",
     navSettings: "設定",
     navSupport: "Support",
     dashboard: "ダッシュボード",
@@ -709,7 +709,7 @@ export function AppShell({ view = "download" }: AppShellProps) {
           <div className="flex items-center justify-between">
             <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                YD
+                <img src="/icon.svg" alt="SsunEdu" className="h-6 w-6" />
               </div>
               {!collapsed && (
                 <div className="text-lg font-semibold italic tracking-tight font-brand">쑨에듀</div>
