@@ -91,7 +91,14 @@ function findDownloadedFile(videoId: string | null): string | null {
 }
 
 type JobStore = Map<string, DownloadJob>;
-type ProcessStore = Map<string, ReturnType<typeof ytdlpExec.exec>>;
+type YtProcess = {
+  kill: (signal?: NodeJS.Signals) => void;
+  stdout?: NodeJS.ReadableStream | null;
+  stderr?: NodeJS.ReadableStream | null;
+  then: (onfulfilled?: (value: unknown) => unknown, onrejected?: (reason: unknown) => unknown) => unknown;
+  catch: (onrejected?: (reason: unknown) => unknown) => unknown;
+};
+type ProcessStore = Map<string, YtProcess>;
 
 const store = (globalThis as { __downloadJobs?: JobStore }).__downloadJobs ?? new Map();
 (globalThis as { __downloadJobs?: JobStore }).__downloadJobs = store;
@@ -142,7 +149,9 @@ export function startJob(job: DownloadJob) {
   const formatInfo = formatString(job.format);
   const outputTemplate = path.join(DOWNLOAD_DIR, "%(title)s [%(id)s].%(ext)s");
   const ytDlpBinary = resolveYtDlpPath();
-  const ytdlp = ytDlpBinary ? ytdlpExec.create(ytDlpBinary) : ytdlpExec;
+  const ytdlp = ytDlpBinary
+    ? (ytdlpExec as unknown as { create: (path: string) => typeof ytdlpExec }).create(ytDlpBinary)
+    : ytdlpExec;
 
   const execOptions: Record<string, unknown> = {
     format: formatInfo.format,
@@ -158,7 +167,12 @@ export function startJob(job: DownloadJob) {
     execOptions.audioQuality = formatInfo.audioQuality;
   }
 
-  const subprocess = ytdlp.exec(job.url, execOptions);
+  const execFn = ((ytdlp as unknown as { exec?: (url: string, flags: Record<string, unknown>) => YtProcess }).exec ??
+    (ytdlp as unknown as (url: string, flags: Record<string, unknown>) => YtProcess)) as (
+    url: string,
+    flags: Record<string, unknown>
+  ) => YtProcess;
+  const subprocess: YtProcess = execFn(job.url, execOptions);
 
   processes.set(job.id, subprocess);
   setJob(job.id, { status: "running" });
@@ -181,7 +195,8 @@ export function startJob(job: DownloadJob) {
     text.split(/\r?\n/).forEach(handleLine);
   });
 
-  subprocess
+  const subprocessPromise = Promise.resolve(subprocess as unknown);
+  subprocessPromise
     .then(() => {
       const videoId = extractVideoId(job.url);
       const fileName = findDownloadedFile(videoId);
