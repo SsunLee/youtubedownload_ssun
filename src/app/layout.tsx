@@ -15,8 +15,32 @@ const uiFont = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "SunEdu YouTube Downloader",
-  description: "YouTube downloader dashboard",
+  title: "SsunEdu YouTube Downloader",
+  description:
+    "Free YouTube downloader dashboard. 무료 유튜브 다운로더. 無料のYouTubeダウンローダー。",
+  keywords: [
+    "youtube downloader",
+    "free youtube downloader",
+    "youtube download site",
+    "무료 유튜브 다운로드",
+    "유튜브 다운로더",
+    "유튜브 다운로드 사이트",
+    "YouTube ダウンロード",
+    "YouTube ダウンローダー 無料",
+  ],
+  alternates: {
+    languages: {
+      "en-US": "/",
+      "ko-KR": "/",
+      "ja-JP": "/",
+    },
+  },
+  openGraph: {
+    title: "SsunEdu YouTube Downloader",
+    description:
+      "Free YouTube downloader dashboard. 무료 유튜브 다운로더. 無料のYouTubeダウンローダー。",
+    locale: "ko_KR",
+  },
 };
 
 export default function RootLayout({

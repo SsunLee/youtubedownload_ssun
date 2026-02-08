@@ -136,7 +136,8 @@ function setJob(id: string, patch: Partial<DownloadJob>) {
 }
 
 function resolveYtDlpPath() {
-  const candidate = path.join(process.cwd(), "node_modules", "yt-dlp-exec", "bin", "yt-dlp.exe");
+  const binaryName = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
+  const candidate = path.join(process.cwd(), "node_modules", "yt-dlp-exec", "bin", binaryName);
   if (fs.existsSync(candidate)) {
     return candidate;
   }

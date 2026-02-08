@@ -23,6 +23,9 @@
 # downloads
 /downloads/
 
+# app data
+/data/
+
 # misc
 .DS_Store
 *.pem
