@@ -24,6 +24,7 @@ const formats = ["Best (Video+Audio)", "1080p", "720p", "480p", "Audio Only (MP3
 
 type Copy = {
   navDownload: string;
+  navM3u8: string;
   navSettings: string;
   navSupport: string;
   dashboard: string;
@@ -33,6 +34,12 @@ type Copy = {
   downloadCenter: string;
   downloadDesc: string;
   urlLabel: string;
+  m3u8UrlLabel: string;
+  m3u8FileLabel: string;
+  m3u8Upload: string;
+  m3u8Convert: string;
+  m3u8UrlConvert: string;
+  m3u8Hint: string;
   analyze: string;
   analyzing: string;
   metaTitle: string;
@@ -75,6 +82,7 @@ type Copy = {
 const copy: Record<Locale, Copy> = {
   EN: {
     navDownload: "YouTube Download",
+    navM3u8: "M3U8 Download",
     navSettings: "Settings",
     navSupport: "Support",
     dashboard: "Dashboard",
@@ -85,6 +93,12 @@ const copy: Record<Locale, Copy> = {
     downloadDesc:
       "Paste a YouTube link, choose output resolution, and download to the server. Use the Download button to save the file.",
     urlLabel: "YouTube URL",
+    m3u8UrlLabel: "M3U8 URL",
+    m3u8FileLabel: "M3U8 File",
+    m3u8Upload: "Upload .m3u8",
+    m3u8Convert: "Convert",
+    m3u8UrlConvert: "Convert URL",
+    m3u8Hint: "Requires ffmpeg installed on the server.",
     analyze: "Analyze",
     analyzing: "Analyzing...",
     metaTitle: "Title",
@@ -125,6 +139,7 @@ const copy: Record<Locale, Copy> = {
   },
   KR: {
     navDownload: "유튜브 다운로드",
+    navM3u8: "M3U8 Download",
     navSettings: "설정",
     navSupport: "Support",
     dashboard: "대시보드",
@@ -135,6 +150,12 @@ const copy: Record<Locale, Copy> = {
     downloadDesc:
       "유튜브 링크를 붙여넣고 해상도를 선택한 뒤 서버에 다운로드합니다. 다운로드 버튼으로 파일을 저장합니다.",
     urlLabel: "YouTube URL",
+    m3u8UrlLabel: "M3U8 URL",
+    m3u8FileLabel: "M3U8 파일",
+    m3u8Upload: "파일 선택",
+    m3u8Convert: "변환",
+    m3u8UrlConvert: "URL 변환",
+    m3u8Hint: "서버에 ffmpeg 설치가 필요합니다.",
     analyze: "메타 조회",
     analyzing: "조회 중...",
     metaTitle: "제목",
@@ -175,6 +196,7 @@ const copy: Record<Locale, Copy> = {
   },
   JP: {
     navDownload: "YouTube ダウンロード",
+    navM3u8: "M3U8 Download",
     navSettings: "設定",
     navSupport: "Support",
     dashboard: "ダッシュボード",
@@ -185,6 +207,12 @@ const copy: Record<Locale, Copy> = {
     downloadDesc:
       "YouTube のリンクを貼り付け、解像度を選んでサーバーに保存します。ダウンロードボタンで保存します。",
     urlLabel: "YouTube URL",
+    m3u8UrlLabel: "M3U8 URL",
+    m3u8FileLabel: "M3U8 ファイル",
+    m3u8Upload: "ファイル選択",
+    m3u8Convert: "変換",
+    m3u8UrlConvert: "URL 変換",
+    m3u8Hint: "サーバーに ffmpeg が必要です。",
     analyze: "メタ取得",
     analyzing: "取得中...",
     metaTitle: "タイトル",
@@ -248,7 +276,7 @@ type MetaInfo = {
 };
 
 type AppShellProps = {
-  view?: "download" | "settings" | "support";
+  view?: "download" | "m3u8" | "settings" | "support";
 };
 
 export function AppShell({ view = "download" }: AppShellProps) {
@@ -269,6 +297,9 @@ export function AppShell({ view = "download" }: AppShellProps) {
   const [jobId, setJobId] = React.useState<string | null>(null);
   const [meta, setMeta] = React.useState<MetaInfo | null>(null);
   const [analyzing, setAnalyzing] = React.useState(false);
+  const [m3u8Url, setM3u8Url] = React.useState("");
+  const [m3u8File, setM3u8File] = React.useState<File | null>(null);
+  const [m3u8Busy, setM3u8Busy] = React.useState(false);
   const [visits, setVisits] = React.useState<number | null>(null);
 
   const loadHistory = React.useCallback(async () => {
@@ -430,6 +461,54 @@ export function AppShell({ view = "download" }: AppShellProps) {
     setJobId(null);
   };
 
+  const onM3u8File = async () => {
+    if (!m3u8File) {
+      setStatus(t.statusMissingUrl);
+      return;
+    }
+    setM3u8Busy(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", m3u8File);
+      const res = await fetch("/api/m3u8/file", { method: "POST", body: formData });
+      if (!res.ok) {
+        const data = await res.json();
+        setStatus(`실패: ${data?.error ?? "Unknown error"}`);
+        return;
+      }
+      const data = (await res.json()) as { fileName: string };
+      setStatus(`OK: ${data.fileName}`);
+      await loadHistory();
+    } finally {
+      setM3u8Busy(false);
+    }
+  };
+
+  const onM3u8Url = async () => {
+    if (!m3u8Url.trim()) {
+      setStatus(t.statusMissingUrl);
+      return;
+    }
+    setM3u8Busy(true);
+    try {
+      const res = await fetch("/api/m3u8/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: m3u8Url }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setStatus(`실패: ${data?.error ?? "Unknown error"}`);
+        return;
+      }
+      const data = (await res.json()) as { fileName: string };
+      setStatus(`OK: ${data.fileName}`);
+      await loadHistory();
+    } finally {
+      setM3u8Busy(false);
+    }
+  };
+
   const statusTone = React.useMemo(() => {
     if (
       downloading ||
@@ -461,6 +540,7 @@ export function AppShell({ view = "download" }: AppShellProps) {
 
   const nav = [
     { label: t.navDownload, href: "/" },
+    { label: t.navM3u8, href: "/m3u8" },
     { label: t.navSettings, href: "/settings" },
   ];
 
@@ -607,97 +687,99 @@ export function AppShell({ view = "download" }: AppShellProps) {
                 <p className="mt-2 text-sm text-muted-foreground">{t.downloadDesc}</p>
 
                 <div className="mt-6 grid gap-4">
-                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                      {t.urlLabel}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <input
-                        className="min-w-[220px] flex-1 rounded-xl border border-border/60 bg-background px-4 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                        placeholder="https://www.youtube.com/watch?v=..."
-                        value={url}
-                        onChange={(event) => setUrl(event.target.value)}
-                      />
-                      <Button
-                        variant="outline"
-                        className="rounded-xl"
-                        onClick={onAnalyze}
-                        disabled={analyzing}
-                      >
-                        <Search className="mr-2 h-4 w-4" />
-                        {analyzing ? t.analyzing : t.analyze}
+                  <>
+                    <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                        {t.urlLabel}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <input
+                            className="min-w-[220px] flex-1 rounded-xl border border-border/60 bg-background px-4 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            value={url}
+                            onChange={(event) => setUrl(event.target.value)}
+                          />
+                          <Button
+                            variant="outline"
+                            className="rounded-xl"
+                            onClick={onAnalyze}
+                            disabled={analyzing}
+                          >
+                            <Search className="mr-2 h-4 w-4" />
+                            {analyzing ? t.analyzing : t.analyze}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                          {t.metaTitle}
+                        </p>
+                        <p className="mt-2 text-sm line-clamp-2">
+                          {meta?.title ?? t.metaUnknown}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                          {t.format}
+                        </p>
+                        <select
+                          className="mt-3 w-full rounded-xl border border-border/60 bg-background px-4 py-2 text-sm"
+                          value={format}
+                          onChange={(event) => setFormat(event.target.value)}
+                        >
+                          {formats.map((item) => {
+                            let label = item;
+                            if (item === "Best (Video+Audio)") {
+                              label = `Best (${formatSizeLabel("best")})`;
+                            } else if (item === "1080p") {
+                              label = `1080p (${formatSizeLabel("1080")})`;
+                            } else if (item === "720p") {
+                              label = `720p (${formatSizeLabel("720")})`;
+                            } else if (item === "480p") {
+                              label = `480p (${formatSizeLabel("480")})`;
+                            }
+                            return (
+                              <option key={item} value={item}>
+                                {label}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        {format === "Best (Video+Audio)" && (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {t.metaBest}: {bestLabel}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{t.progress}</span>
+                          <span>{Math.round(progress)}%</span>
+                        </div>
+                        <Progress value={progress} className="mt-3" />
+                      </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button className="rounded-2xl" onClick={onDownload} disabled={downloading}>
+                        {downloading ? t.downloading : t.download}
                       </Button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                      {t.metaTitle}
-                    </p>
-                    <p className="mt-2 text-sm line-clamp-2">
-                      {meta?.title ?? t.metaUnknown}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                      {t.format}
-                    </p>
-                    <select
-                      className="mt-3 w-full rounded-xl border border-border/60 bg-background px-4 py-2 text-sm"
-                      value={format}
-                      onChange={(event) => setFormat(event.target.value)}
-                    >
-                    {formats.map((item) => {
-                      let label = item;
-                      if (item === "Best (Video+Audio)") {
-                        label = `Best (${formatSizeLabel("best")})`;
-                      } else if (item === "1080p") {
-                        label = `1080p (${formatSizeLabel("1080")})`;
-                      } else if (item === "720p") {
-                        label = `720p (${formatSizeLabel("720")})`;
-                      } else if (item === "480p") {
-                        label = `480p (${formatSizeLabel("480")})`;
-                      }
-                      return (
-                        <option key={item} value={item}>
-                          {label}
-                        </option>
-                      );
-                    })}
-                  </select>
-                    {format === "Best (Video+Audio)" && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {t.metaBest}: {bestLabel}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{t.progress}</span>
-                      <span>{Math.round(progress)}%</span>
-                    </div>
-                    <Progress value={progress} className="mt-3" />
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button className="rounded-2xl" onClick={onDownload} disabled={downloading}>
-                      {downloading ? t.downloading : t.download}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="rounded-2xl"
-                      onClick={onCancel}
-                      disabled={!downloading}
-                    >
-                      {t.stop}
-                    </Button>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span className={`h-2.5 w-2.5 rounded-full ${statusTone}`} />
+                        <Button
+                          variant="outline"
+                          className="rounded-2xl"
+                          onClick={onCancel}
+                          disabled={!downloading}
+                        >
+                          {t.stop}
+                        </Button>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span className={`h-2.5 w-2.5 rounded-full ${statusTone}`} />
                       {status}
                     </div>
                   </div>
+                  </>
                 </div>
               </div>
 
@@ -786,6 +868,103 @@ export function AppShell({ view = "download" }: AppShellProps) {
                     {t.sponsor}
                   </p>
                   <p className="mt-2 text-base">{t.sponsorText}</p>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {view === "m3u8" && (
+            <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-3xl border border-border/60 bg-card/80 p-6 shadow-sm">
+                <h2 className="text-lg font-semibold">{t.navM3u8}</h2>
+                <p className="mt-2 text-sm text-muted-foreground">{t.m3u8Hint}</p>
+
+                <div className="mt-6 grid gap-4">
+                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                      {t.m3u8FileLabel}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input
+                        type="file"
+                        accept=".m3u8"
+                        onChange={(event) =>
+                          setM3u8File(event.target.files?.[0] ?? null)
+                        }
+                      />
+                      <Button
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={onM3u8File}
+                        disabled={m3u8Busy || !m3u8File}
+                      >
+                        {m3u8Busy ? t.analyzing : t.m3u8Convert}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                      {t.m3u8UrlLabel}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <input
+                        className="min-w-[220px] flex-1 rounded-xl border border-border/60 bg-background px-4 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        placeholder="https://example.com/playlist.m3u8"
+                        value={m3u8Url}
+                        onChange={(event) => setM3u8Url(event.target.value)}
+                      />
+                      <Button
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={onM3u8Url}
+                        disabled={m3u8Busy}
+                      >
+                        {m3u8Busy ? t.analyzing : t.m3u8UrlConvert}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className={`h-2.5 w-2.5 rounded-full ${statusTone}`} />
+                    {status}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="rounded-3xl border border-border/60 bg-card/80 p-6 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold">{t.history}</h2>
+                    <Button variant="ghost" size="sm" onClick={loadHistory}>
+                      {t.refresh}
+                    </Button>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {history.length === 0 && (
+                      <p className="text-sm text-muted-foreground">{t.emptyHistory}</p>
+                    )}
+                    {history.map((item) => (
+                      <div
+                        key={`${item.name}-${item.createdAt}`}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {(item.size / (1024 * 1024)).toFixed(1)} MB · {item.format ?? ""}
+                          </p>
+                        </div>
+                        <a
+                          className="inline-flex items-center gap-2 rounded-full border border-border/60 px-3 py-1 text-sm hover:bg-muted/40"
+                          href={`/api/downloads/${encodeURIComponent(item.name)}`}
+                        >
+                          <Download className="h-4 w-4" />
+                          {t.downloadFile}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </section>
