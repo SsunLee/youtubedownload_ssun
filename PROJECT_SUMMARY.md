@@ -14,14 +14,14 @@ Base directory: `C:\Users\tnsqo\sunbae\youtube_download`
 - `README.txt`
   - 파이썬 앱 실행 방법 요약.
 
-## web/ (Next.js + React + TS + Tailwind + shadcn/ui)
+## Web App (Next.js + React + TS + Tailwind + shadcn/ui)
 - `package.json`
   - Next.js + Tailwind + shadcn/ui + next-themes + yt-dlp-exec + lucide-react.
 - `downloads/`
   - 서버(로컬) 다운로드 파일 저장 폴더.
   - `manifest.json`에 최근 다운로드 히스토리 저장.
 
-### web/src/app
+### src/app
 - `layout.tsx`
   - 폰트 구성(브랜드/메인), ThemeProvider 설정.
 - `globals.css`
@@ -29,7 +29,7 @@ Base directory: `C:\Users\tnsqo\sunbae\youtube_download`
 - `page.tsx`
   - `AppShell` 렌더링.
 
-### web/src/components
+### src/components
 - `app-shell.tsx`
   - 좌측 GNB(접힘/펼침), 로고(쑨에듀 italic).
   - 다운로드 UI: URL 입력, 폴더 선택, 포맷 선택.
@@ -39,11 +39,11 @@ Base directory: `C:\Users\tnsqo\sunbae\youtube_download`
 - `theme-provider.tsx`
   - `next-themes` 래퍼.
 
-### web/src/components/ui (shadcn/ui)
+### src/components/ui (shadcn/ui)
 - `button.tsx`, `switch.tsx`, `separator.tsx`, `progress.tsx`
   - 기본 UI 컴포넌트.
 
-### web/src/app/api
+### src/app/api
 - `download/route.ts`
   - 다운로드 작업 생성 API.
 - `progress/[id]/route.ts`
@@ -56,7 +56,7 @@ Base directory: `C:\Users\tnsqo\sunbae\youtube_download`
   - 파일 다운로드 스트리밍 API.
   - 한글 파일명 대응(Content-Disposition 이중 설정).
 
-### web/src/lib
+### src/lib
 - `download-jobs.ts`
   - 다운로드 작업/프로세스 상태 관리.
   - yt-dlp 실행 및 진행률 파싱.
@@ -72,7 +72,6 @@ python main.py
 
 ### 웹 앱
 ```powershell
-cd web
 npm install
 npm run dev
 ```
