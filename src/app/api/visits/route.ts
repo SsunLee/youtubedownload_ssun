@@ -4,7 +4,8 @@ import path from "path";
 
 export const runtime = "nodejs";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const BASE_DIR = process.env.VERCEL ? "/tmp" : process.cwd();
+const DATA_DIR = path.join(BASE_DIR, "data");
 const COUNTER_PATH = path.join(DATA_DIR, "visits.json");
 
 function ensureData() {

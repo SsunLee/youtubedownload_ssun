@@ -5,7 +5,8 @@ import path from "path";
 
 export const runtime = "nodejs";
 
-const DOWNLOAD_DIR = path.join(process.cwd(), "downloads");
+const BASE_DIR = process.env.VERCEL ? "/tmp" : process.cwd();
+const DOWNLOAD_DIR = path.join(BASE_DIR, "downloads");
 const MANIFEST_PATH = path.join(DOWNLOAD_DIR, "manifest.json");
 
 function ensureDirs() {

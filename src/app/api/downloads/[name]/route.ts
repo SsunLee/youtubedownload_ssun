@@ -5,7 +5,8 @@ import { Readable } from "stream";
 
 export const runtime = "nodejs";
 
-const DOWNLOAD_DIR = path.join(process.cwd(), "downloads");
+const BASE_DIR = process.env.VERCEL ? "/tmp" : process.cwd();
+const DOWNLOAD_DIR = path.join(BASE_DIR, "downloads");
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ name: string }> }) {
   const { name } = await ctx.params;
