@@ -41,6 +41,9 @@ export const metadata: Metadata = {
       "Free YouTube downloader dashboard. 무료 유튜브 다운로더. 無料のYouTubeダウンローダー。",
     locale: "ko_KR",
   },
+  verification: {
+    google: "Vn7jzu7s2VYl84xoMTTI3YFZXn12lmwV5OYDC_Eolvw",
+  },
 };
 
 export default function RootLayout({
