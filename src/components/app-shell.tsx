@@ -303,6 +303,8 @@ type MetaInfo = {
   bestHeight?: number;
   sizeBytes?: number;
   sizeMap?: Partial<Record<"best" | "1080" | "720" | "480", number>>;
+  limited?: boolean;
+  warning?: string;
 };
 
 type AppShellProps = {
@@ -532,7 +534,12 @@ export function AppShell({ view = "download" }: AppShellProps) {
       }
       const data = payload as MetaInfo;
       setMeta(data);
-      setStatus(t.ready);
+      if (data.warning) {
+        setStatus(data.warning);
+        addLog(`[YouTube] 메타 제한: ${data.warning}`);
+      } else {
+        setStatus(t.ready);
+      }
       addLog(`[YouTube] 메타 조회 완료`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";

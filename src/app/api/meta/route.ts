@@ -62,6 +62,33 @@ function parseExecResult(result: ExecResult): YtInfo {
   return result as YtInfo;
 }
 
+function isYoutubeBotBlock(detail: string): boolean {
+  return /sign in to confirm you.?re not a bot|use --cookies-from-browser|use --cookies/i.test(
+    detail
+  );
+}
+
+async function fetchOEmbedTitle(url: string): Promise<string | null> {
+  const endpoint = new URL("https://www.youtube.com/oembed");
+  endpoint.searchParams.set("url", url);
+  endpoint.searchParams.set("format", "json");
+
+  try {
+    const response = await fetch(endpoint.toString(), {
+      cache: "no-store",
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { title?: unknown };
+    if (typeof data.title === "string" && data.title.trim()) {
+      return data.title.trim();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -110,8 +137,22 @@ export async function POST(req: NextRequest) {
     }
 
     if (!info) {
+      const detail = errors.join(" | ") || "Unknown error";
+      if (isYoutubeBotBlock(detail)) {
+        const fallbackTitle = await fetchOEmbedTitle(normalizedUrl);
+        if (fallbackTitle) {
+          return NextResponse.json({
+            title: fallbackTitle,
+            bestHeight: null,
+            sizeBytes: null,
+            sizeMap: {},
+            limited: true,
+            warning: "YouTube blocked detailed metadata lookup on this server IP.",
+          });
+        }
+      }
       return NextResponse.json(
-        { error: "Metadata lookup failed", detail: errors.join(" | ") || "Unknown error" },
+        { error: "Metadata lookup failed", detail },
         { status: 500 }
       );
     }
