@@ -12,9 +12,25 @@ type YtInfo = {
   filesize_approx?: number;
 };
 type SizeMap = Partial<Record<"best" | "1080" | "720" | "480", number>>;
+type ExecResult = YtInfo | string | { stdout?: unknown; stderr?: unknown };
+
+function toErrorDetail(err: unknown): string {
+  if (err instanceof Error) {
+    const candidate = err as Error & { stderr?: unknown; stdout?: unknown };
+    const stderr = String(candidate.stderr ?? "").trim();
+    if (stderr) return stderr;
+    const stdout = String(candidate.stdout ?? "").trim();
+    if (stdout) return stdout;
+    return err.message;
+  }
+  return String(err);
+}
 
 function parseJson(text: string): YtInfo {
   const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error("stdout empty");
+  }
   if (trimmed.startsWith("{")) {
     return JSON.parse(trimmed) as YtInfo;
   }
@@ -28,8 +44,24 @@ function parseJson(text: string): YtInfo {
 
 function extractUrl(raw: string): string {
   const trimmed = raw.trim();
-  const match = trimmed.match(/https?:\/\/\S+/);
-  return match ? match[0] : trimmed;
+  const match = trimmed.match(/https?:\/\/[^\s"'<>`]+/i);
+  const candidate = (match ? match[0] : trimmed).replace(/[)\],.;]+$/, "");
+  return candidate;
+}
+
+function parseExecResult(result: ExecResult): YtInfo {
+  if (result && typeof result === "object" && "stdout" in result) {
+    const stdout = String(result.stdout ?? "");
+    const stderr = String(result.stderr ?? "");
+    if (!stdout.trim()) {
+      throw new Error(stderr || "No metadata returned");
+    }
+    return parseJson(stdout);
+  }
+  if (typeof result === "string") {
+    return parseJson(result);
+  }
+  return result as YtInfo;
 }
 
 export async function POST(req: NextRequest) {
@@ -42,6 +74,12 @@ export async function POST(req: NextRequest) {
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
     }
+    let normalizedUrl: string;
+    try {
+      normalizedUrl = new URL(url).toString();
+    } catch {
+      return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+    }
 
     const binaryName = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
     const binaryPath = path.join(process.cwd(), "node_modules", "yt-dlp-exec", "bin", binaryName);
@@ -51,34 +89,38 @@ export async function POST(req: NextRequest) {
     const execFn =
       ((ytdlp as unknown as { exec?: (url: string, flags: Record<string, unknown>) => unknown }).exec ??
         (ytdlp as unknown as (url: string, flags: Record<string, unknown>) => unknown));
-
-    const result = await execFn(url, {
+    const baseFlags = {
       dumpSingleJson: true,
       skipDownload: true,
       noPlaylist: true,
       noWarnings: true,
-    });
+    } as const;
+    const attempts: Array<{ name: string; flags: Record<string, unknown> }> = [
+      { name: "default", flags: {} },
+      {
+        name: "youtube-fallback",
+        flags: { extractorArgs: "youtube:player_client=android,web", forceIpv4: true },
+      },
+    ];
 
-    let info: YtInfo;
-    try {
-      if (result && typeof result === "object" && "stdout" in (result as Record<string, unknown>)) {
-        const stdout = String((result as { stdout?: unknown }).stdout ?? "");
-        const stderr = String((result as { stderr?: unknown }).stderr ?? "");
-        if (!stdout.trim()) {
-          return NextResponse.json(
-            { error: "No metadata returned", detail: stderr || "stdout empty" },
-            { status: 500 }
-          );
-        }
-        info = parseJson(stdout);
-      } else if (typeof result === "string") {
-        info = parseJson(result);
-      } else {
-        info = result as YtInfo;
+    let info: YtInfo | null = null;
+    const errors: string[] = [];
+    for (const attempt of attempts) {
+      try {
+        const result = (await execFn(normalizedUrl, {
+          ...baseFlags,
+          ...attempt.flags,
+        })) as ExecResult;
+        info = parseExecResult(result);
+        break;
+      } catch (err) {
+        errors.push(`${attempt.name}: ${toErrorDetail(err)}`);
       }
-    } catch (err) {
+    }
+
+    if (!info) {
       return NextResponse.json(
-        { error: "Failed to parse metadata", detail: err instanceof Error ? err.message : String(err) },
+        { error: "Metadata lookup failed", detail: errors.join(" | ") || "Unknown error" },
         { status: 500 }
       );
     }

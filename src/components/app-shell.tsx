@@ -514,14 +514,31 @@ export function AppShell({ view = "download" }: AppShellProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
+      let payload: unknown = null;
+      try {
+        payload = await res.json();
+      } catch {
+        payload = null;
+      }
       if (!res.ok) {
-        setAnalyzing(false);
-        addLog(`[YouTube] 메타 조회 실패`);
+        const err = payload as { error?: unknown; detail?: unknown } | null;
+        const message =
+          typeof err?.error === "string" && err.error.trim() ? err.error : `HTTP ${res.status}`;
+        const detail = typeof err?.detail === "string" && err.detail.trim() ? ` | ${err.detail}` : "";
+        setMeta(null);
+        setStatus(`실패: ${message}`);
+        addLog(`[YouTube] 메타 조회 실패: ${message}${detail}`);
         return;
       }
-      const data = (await res.json()) as MetaInfo;
+      const data = payload as MetaInfo;
       setMeta(data);
+      setStatus(t.ready);
       addLog(`[YouTube] 메타 조회 완료`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setMeta(null);
+      setStatus(`실패: ${message}`);
+      addLog(`[YouTube] 메타 조회 실패: ${message}`);
     } finally {
       setAnalyzing(false);
     }
