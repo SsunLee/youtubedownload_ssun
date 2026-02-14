@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
-import ytdlpExec from "yt-dlp-exec";
 import { getWritableBaseDir } from "@/lib/storage-path";
+import { getYtDlpExecFn } from "@/lib/ytdlp";
 
 export type JobStatus = "queued" | "running" | "done" | "error";
 
@@ -137,24 +137,21 @@ function setJob(id: string, patch: Partial<DownloadJob>) {
   });
 }
 
-function resolveYtDlpPath() {
-  const binaryName = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
-  const candidate = path.join(process.cwd(), "node_modules", "yt-dlp-exec", "bin", binaryName);
-  if (fs.existsSync(candidate)) {
-    return candidate;
-  }
-  return null;
-}
-
 export function startJob(job: DownloadJob) {
   ensureDirs();
 
   const formatInfo = formatString(job.format);
   const outputTemplate = path.join(DOWNLOAD_DIR, "%(title)s [%(id)s].%(ext)s");
-  const ytDlpBinary = resolveYtDlpPath();
-  const ytdlp = ytDlpBinary
-    ? (ytdlpExec as unknown as { create: (path: string) => typeof ytdlpExec }).create(ytDlpBinary)
-    : ytdlpExec;
+  let execFn: ((url: string, flags: Record<string, unknown>) => YtProcess) | null = null;
+  try {
+    execFn = getYtDlpExecFn() as (url: string, flags: Record<string, unknown>) => YtProcess;
+  } catch (error) {
+    setJob(job.id, {
+      status: "error",
+      error: error instanceof Error ? error.message : "yt-dlp unavailable",
+    });
+    return;
+  }
 
   const execOptions: Record<string, unknown> = {
     format: formatInfo.format,
@@ -170,11 +167,6 @@ export function startJob(job: DownloadJob) {
     execOptions.audioQuality = formatInfo.audioQuality;
   }
 
-  const execFn = ((ytdlp as unknown as { exec?: (url: string, flags: Record<string, unknown>) => YtProcess }).exec ??
-    (ytdlp as unknown as (url: string, flags: Record<string, unknown>) => YtProcess)) as (
-    url: string,
-    flags: Record<string, unknown>
-  ) => YtProcess;
   const subprocess: YtProcess = execFn(job.url, execOptions);
 
   processes.set(job.id, subprocess);

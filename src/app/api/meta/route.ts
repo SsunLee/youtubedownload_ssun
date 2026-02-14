@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import ytdlpExec from "yt-dlp-exec";
-import path from "path";
-import fs from "fs";
+import { getYtDlpExecFn } from "@/lib/ytdlp";
 
 export const runtime = "nodejs";
 
@@ -81,14 +79,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
     }
 
-    const binaryName = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
-    const binaryPath = path.join(process.cwd(), "node_modules", "yt-dlp-exec", "bin", binaryName);
-    const ytdlp = fs.existsSync(binaryPath)
-      ? (ytdlpExec as unknown as { create: (bin: string) => typeof ytdlpExec }).create(binaryPath)
-      : ytdlpExec;
-    const execFn =
-      ((ytdlp as unknown as { exec?: (url: string, flags: Record<string, unknown>) => unknown }).exec ??
-        (ytdlp as unknown as (url: string, flags: Record<string, unknown>) => unknown));
+    const execFn = getYtDlpExecFn();
     const baseFlags = {
       dumpSingleJson: true,
       skipDownload: true,
